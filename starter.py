@@ -481,87 +481,52 @@ def test_model(model, opt, epoch, tokenizer):
     perplexity = torch.exp(torch.tensor(avg_loss)).item()
     print(f"Epoch {epoch+1}, Test Loss: {avg_loss:.4f}, Test Perplexity: {perplexity:.2f}")
     with open(opt.log_file, "a") as f:
-        f.write(f"Epoch {epoch+1}, Test Perplexity: {perplexity:.2f}\n")
+        f.write(f"Epoch {epoch+1}, Test Loss: {avg_loss:.4f}, Test Perplexity: {perplexity:.2f}\n")
     model.train()
 
 
 def plot_metrics(log_file):
-    epochs = []
-    train_losses = []
-    train_perplexities = []
-    val_losses = []
-    val_perplexities = []
-    test_losses = [] 
-    test_perplexities = []
+    metrics = {}
 
     with open(log_file, 'r') as f:
         for line in f:
-            # Extract epoch number
             epoch_match = re.search(r'Epoch (\d+)', line)
             if epoch_match:
                 epoch = int(epoch_match.group(1))
-                if epoch not in epochs:
-                    epochs.append(epoch)
-                    # Initialize metrics for the new epoch
-                    train_loss = None
-                    train_perplexity = None
-                    val_loss = None
-                    val_perplexity = None
-                    test_loss = None
-                    test_perplexity = None
-                else:
-                    # If epoch already exists, find the index to update
-                    epoch_index = epochs.index(epoch)
-                    train_loss = train_losses[epoch_index] if epoch_index < len(train_losses) else None
-                    train_perplexity = train_perplexities[epoch_index] if epoch_index < len(train_perplexities) else None
-                    val_loss = val_losses[epoch_index] if epoch_index < len(val_losses) else None
-                    val_perplexity = val_perplexities[epoch_index] if epoch_index < len(val_perplexities) else None
-                    test_loss = test_losses[epoch_index] if epoch_index < len(test_losses) else None
-                    test_perplexity = test_perplexities[epoch_index] if epoch_index < len(test_perplexities) else None
+                if epoch not in metrics:
+                    metrics[epoch] = {}
 
-            # Extract train loss
-            train_loss_match = re.search(r'Train Loss \(Epoch\): (\d+\.\d+)', line)
-            if train_loss_match and epoch in epochs:
-                train_losses.append(float(train_loss_match.group(1)))
+            train_loss_match = re.search(r'Train Loss: (\d+\.\d+)', line)
+            if train_loss_match and epoch in metrics:
+                metrics[epoch]['train_loss'] = float(train_loss_match.group(1))
 
-            # Extract train perplexity
-            train_perplexity_match = re.search(r'Train Perplexity \(Epoch\): (\d+\.\d+)', line)
-            if train_perplexity_match and epoch in epochs:
-                train_perplexities.append(float(train_perplexity_match.group(1)))
+            train_perplexity_match = re.search(r'Train Perplexity: (\d+\.\d+)', line)
+            if train_perplexity_match and epoch in metrics:
+                metrics[epoch]['train_perplexity'] = float(train_perplexity_match.group(1))
 
-            # Extract validation loss
             val_loss_match = re.search(r'Validation Loss: (\d+\.\d+)', line)
-            if val_loss_match and epoch in epochs:
-                val_losses.append(float(val_loss_match.group(1)))
+            if val_loss_match and epoch in metrics:
+                metrics[epoch]['val_loss'] = float(val_loss_match.group(1))
 
-            # Extract validation perplexity
             val_perplexity_match = re.search(r'Validation Perplexity: (\d+\.\d+)', line)
-            if val_perplexity_match and epoch in epochs:
-                val_perplexities.append(float(val_perplexity_match.group(1)))
+            if val_perplexity_match and epoch in metrics:
+                metrics[epoch]['val_perplexity'] = float(val_perplexity_match.group(1))
 
-            # Extract test loss (if you start saving it)
             test_loss_match = re.search(r'Test Loss: (\d+\.\d+)', line)
-            if test_loss_match and epoch in epochs:
-                test_losses.append(float(test_loss_match.group(1)))
+            if test_loss_match and epoch in metrics:
+                metrics[epoch]['test_loss'] = float(test_loss_match.group(1))
 
-            # Extract test perplexity
             test_perplexity_match = re.search(r'Test Perplexity: (\d+\.\d+)', line)
-            if test_perplexity_match and epoch in epochs:
-                test_perplexities.append(float(test_perplexity_match.group(1)))
+            if test_perplexity_match and epoch in metrics:
+                metrics[epoch]['test_perplexity'] = float(test_perplexity_match.group(1))
 
-    # Ensure all lists have the same length as epochs
-    while len(train_losses) < len(epochs):
-        train_losses.append(None)
-    while len(train_perplexities) < len(epochs):
-        train_perplexities.append(None)
-    while len(val_losses) < len(epochs):
-        val_losses.append(None)
-    while len(val_perplexities) < len(epochs):
-        val_perplexities.append(None)
-    while len(test_losses) < len(epochs):
-        test_losses.append(None)
-    while len(test_perplexities) < len(epochs):
-        test_perplexities.append(None)
+    epochs = sorted(metrics.keys())
+    train_losses = [metrics[e].get('train_loss') for e in epochs]
+    train_perplexities = [metrics[e].get('train_perplexity') for e in epochs]
+    val_losses = [metrics[e].get('val_loss') for e in epochs]
+    val_perplexities = [metrics[e].get('val_perplexity') for e in epochs]
+    test_losses = [metrics[e].get('test_loss') for e in epochs]
+    test_perplexities = [metrics[e].get('test_perplexity') for e in epochs]
 
     # Plotting Losses
     plt.figure(figsize=(10, 6))

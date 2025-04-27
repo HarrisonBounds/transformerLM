@@ -14,6 +14,8 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch.autograd import Variable
 from transformers import GPT2TokenizerFast
+import re 
+import matplotlib.pyplot as plt
 
 def read_corpus(filename,tokenizer):
     seq = []
@@ -387,66 +389,77 @@ def data_generator(data, batch_size, seq_len, device, tokenizer):
 
     
 def train_model(model, opt, tokenizer):
-    
-    # write code to:
-    #  1. create a nopeak mask
-    #  2. feed training data to the model in batches
-    #  3. send the indices of training tokens to the GPU
-    #  4. linearize the predictions and compute the loss against ground truth
-    #     (you can use F.cross_entropy or write your own code)
-    #  5. calculate and apply the gradients with loss.backward() and optimizer.step()
-    #  6. report intermediate trainining perplexity
-    #  7. generate a test perplexity once per training epoch by calling test_model()
-    #  8. save model weights to file specified in opt.savename
-    #  SEE trainer.py for examples of each of the above
 
-    
     model.train()
-
-    optimizer = opt.optimizer # Use the optimizer from main
-    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id) #loss function
+    optimizer = opt.optimizer
+    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
     for epoch in range(opt.epochs):
         total_loss = 0
-        for i, (input_batch, target_batch) in enumerate(data_generator(opt.train, opt.batchsize, opt.seqlen, opt.device, tokenizer)): #use data generator
+        num_batches = 0
+        for i, (input_batch, target_batch) in enumerate(data_generator(opt.train, opt.batchsize, opt.seqlen, opt.device, tokenizer)):
             optimizer.zero_grad()
 
-            # Create mask (nopeak mask)
             batch_size, seq_len = input_batch.size()
             trg_mask = nopeak_mask(seq_len).to(opt.device)
 
-            # Forward pass
-            output = model(input_batch, trg_mask)  # Pass only input, mask
-            # Output is of shape (batch_size, seq_len, vocab_size)
-
-            # Need to reshape for cross-entropy loss
+            output = model(input_batch, trg_mask)
             output = output.reshape(batch_size * seq_len, -1)
             target_batch = target_batch.reshape(batch_size * seq_len)
 
             loss = criterion(output, target_batch)
             loss.backward()
 
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.norm) #opt.norm
+            torch.nn.utils.clip_grad_norm_(model.parameters(), opt.norm)
             optimizer.step()
             if opt.SGDR:
                 opt.sched.step()
 
             total_loss += loss.item()
+            num_batches += 1
 
-            if i % opt.printevery == 0:
-                avg_loss = total_loss / (i + 1)
-                print(f"Epoch {epoch}, Batch {i}, Loss: {avg_loss:.4f}")
-                with open(opt.log_file, "a") as f:
-                    f.write(f"Epoch {epoch}, Batch {i}, Loss: {avg_loss:.4f}\n")
 
-        #save model
+        # Calculate average loss over the entire epoch
+        avg_loss_epoch = total_loss / num_batches if num_batches > 0 else 0.
+        perplexity_epoch = torch.exp(torch.tensor(avg_loss_epoch)).item() if avg_loss_epoch > 0 else 0.
+
+        print(f"Epoch {epoch+1}, Train Loss: {avg_loss_epoch:.4f}, Train Perplexity: {perplexity_epoch:.2f}")
+        with open(opt.log_file, "a") as f:
+            f.write(f"Epoch {epoch+1}, Train Loss: {avg_loss_epoch:.4f}, Train Perplexity: {perplexity_epoch:.2f}\n")
+
+        # Save model
         if opt.savename:
             torch.save(model.state_dict(), f"{opt.savename}/model_epoch_{epoch}.pth")
-        test_model(model, opt, epoch, tokenizer) 
 
+        validate_model(model, opt, epoch, tokenizer)
+        test_model(model, opt, epoch, tokenizer)
     
+def validate_model(model, opt, epoch, tokenizer):
+
+    model.eval()
+    total_loss = 0
+    num_batches = 0  # Initialize batch counter for validation set
+    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
+
+    with torch.no_grad():
+        for i, (input_batch, target_batch) in enumerate(data_generator(opt.valid, opt.batchsize, opt.seqlen, opt.device, tokenizer)):  # Use data_generator for validation data
+            batch_size, seq_len = input_batch.size()
+            trg_mask = nopeak_mask(seq_len).to(opt.device)
+            output = model(input_batch, trg_mask)
+             # Output is of shape (batch_size, seq_len, vocab_size)
+            output = output.reshape(batch_size * seq_len, -1)
+            target_batch = target_batch.reshape(batch_size * seq_len)
+            loss = criterion(output, target_batch)
+            total_loss += loss.item()
+            num_batches += 1
+
+    avg_loss = total_loss / num_batches if num_batches > 0 else 0.
+    perplexity = torch.exp(torch.tensor(avg_loss)).item() if avg_loss > 0 else 0.
+    print(f"Epoch {epoch+1}, Validation Loss: {avg_loss:.4f}, Validation Perplexity: {perplexity:.2f}")
+    with open(opt.log_file, "a") as f:
+        f.write(f"Epoch {epoch+1}, Validation Loss: {avg_loss:.4f}, Validation Perplexity: {perplexity:.2f}\n")
     
+
 def test_model(model, opt, epoch, tokenizer):
     
     model.eval()
@@ -466,13 +479,116 @@ def test_model(model, opt, epoch, tokenizer):
 
     avg_loss = total_loss / (i + 1)
     perplexity = torch.exp(torch.tensor(avg_loss)).item()
-    print(f"Epoch {epoch}, Test Perplexity: {perplexity:.2f}")
+    print(f"Epoch {epoch+1}, Test Loss: {avg_loss:.4f}, Test Perplexity: {perplexity:.2f}")
     with open(opt.log_file, "a") as f:
-        f.write(f"Epoch {epoch}, Test Perplexity: {perplexity:.2f}\n")
+        f.write(f"Epoch {epoch+1}, Test Perplexity: {perplexity:.2f}\n")
     model.train()
 
-    
-    model.train()
+
+def plot_metrics(log_file):
+    epochs = []
+    train_losses = []
+    train_perplexities = []
+    val_losses = []
+    val_perplexities = []
+    test_losses = [] 
+    test_perplexities = []
+
+    with open(log_file, 'r') as f:
+        for line in f:
+            # Extract epoch number
+            epoch_match = re.search(r'Epoch (\d+)', line)
+            if epoch_match:
+                epoch = int(epoch_match.group(1))
+                if epoch not in epochs:
+                    epochs.append(epoch)
+                    # Initialize metrics for the new epoch
+                    train_loss = None
+                    train_perplexity = None
+                    val_loss = None
+                    val_perplexity = None
+                    test_loss = None
+                    test_perplexity = None
+                else:
+                    # If epoch already exists, find the index to update
+                    epoch_index = epochs.index(epoch)
+                    train_loss = train_losses[epoch_index] if epoch_index < len(train_losses) else None
+                    train_perplexity = train_perplexities[epoch_index] if epoch_index < len(train_perplexities) else None
+                    val_loss = val_losses[epoch_index] if epoch_index < len(val_losses) else None
+                    val_perplexity = val_perplexities[epoch_index] if epoch_index < len(val_perplexities) else None
+                    test_loss = test_losses[epoch_index] if epoch_index < len(test_losses) else None
+                    test_perplexity = test_perplexities[epoch_index] if epoch_index < len(test_perplexities) else None
+
+            # Extract train loss
+            train_loss_match = re.search(r'Train Loss \(Epoch\): (\d+\.\d+)', line)
+            if train_loss_match and epoch in epochs:
+                train_losses.append(float(train_loss_match.group(1)))
+
+            # Extract train perplexity
+            train_perplexity_match = re.search(r'Train Perplexity \(Epoch\): (\d+\.\d+)', line)
+            if train_perplexity_match and epoch in epochs:
+                train_perplexities.append(float(train_perplexity_match.group(1)))
+
+            # Extract validation loss
+            val_loss_match = re.search(r'Validation Loss: (\d+\.\d+)', line)
+            if val_loss_match and epoch in epochs:
+                val_losses.append(float(val_loss_match.group(1)))
+
+            # Extract validation perplexity
+            val_perplexity_match = re.search(r'Validation Perplexity: (\d+\.\d+)', line)
+            if val_perplexity_match and epoch in epochs:
+                val_perplexities.append(float(val_perplexity_match.group(1)))
+
+            # Extract test loss (if you start saving it)
+            test_loss_match = re.search(r'Test Loss: (\d+\.\d+)', line)
+            if test_loss_match and epoch in epochs:
+                test_losses.append(float(test_loss_match.group(1)))
+
+            # Extract test perplexity
+            test_perplexity_match = re.search(r'Test Perplexity: (\d+\.\d+)', line)
+            if test_perplexity_match and epoch in epochs:
+                test_perplexities.append(float(test_perplexity_match.group(1)))
+
+    # Ensure all lists have the same length as epochs
+    while len(train_losses) < len(epochs):
+        train_losses.append(None)
+    while len(train_perplexities) < len(epochs):
+        train_perplexities.append(None)
+    while len(val_losses) < len(epochs):
+        val_losses.append(None)
+    while len(val_perplexities) < len(epochs):
+        val_perplexities.append(None)
+    while len(test_losses) < len(epochs):
+        test_losses.append(None)
+    while len(test_perplexities) < len(epochs):
+        test_perplexities.append(None)
+
+    # Plotting Losses
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, train_losses, marker='o', linestyle='-', label='Train Loss')
+    plt.plot(epochs, val_losses, marker='o', linestyle='-', label='Validation Loss')
+    plt.plot(epochs, test_losses, marker='o', linestyle='-', label='Test Loss')
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('loss_plot_from_log.png')
+    plt.show()
+
+    # Plotting Perplexities
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, train_perplexities, marker='o', linestyle='-', label='Train Perplexity')
+    plt.plot(epochs, val_perplexities, marker='o', linestyle='-', label='Validation Perplexity')
+    plt.plot(epochs, test_perplexities, marker='o', linestyle='-', label='Test Perplexity')
+    plt.xlabel('Epoch')
+    plt.ylabel('Perplexity')
+    plt.title('Training, Validation, and Test Perplexity')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('perplexity_plot_from_log.png')
+    plt.show()
 
 def main():
     
@@ -481,7 +597,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-no_cuda', action='store_true')
     parser.add_argument('-SGDR', action='store_true')
-    parser.add_argument('-epochs', type=int, default=20)
+    parser.add_argument('-epochs', type=int, default=5)
     parser.add_argument('-d_model', type=int, default=512)
     parser.add_argument('-n_layers', type=int, default=6)
     parser.add_argument('-heads', type=int, default=8)
@@ -511,7 +627,7 @@ def main():
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
     source_name = sys.argv[0]
-    dir_name = dir_name + "//"
+    dir_name = dir_name + "/"
     opt.dir_name = dir_name
     shutil.copy(source_name,dir_name + source_name)
     opt.log_file = dir_name + "log_file.txt"
@@ -553,7 +669,8 @@ def main():
     opt.trg_pad = 0
             
     train_model(model, opt, tokenizer)
-    test_model(model, opt, -1, tokenizer)
+    plot_metrics(opt.log_file)
+    
         
 if __name__ == "__main__":
     main()        

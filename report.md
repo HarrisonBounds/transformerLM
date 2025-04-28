@@ -10,19 +10,61 @@ Finally, the training, validation, and test functions were created to train the 
 
 ### Results 
 
+![alt text](loss_plot_from_log.png)
+
+![alt text](perplexity_plot_from_log.png)
+
+The final test perplexity is 312.13
+
 ---
 
 ### Hyperparameters
+
+This assignment required that the model was trained with:
+- Epochs: 20
+- Embedding Dimension: 512
+- Attention Heads: 8
+- Layers: 6
+- Sequence Length: 512
+- Dropout Rate: 0.1
+
+This leaves these hyperparameters to tune:
+
+- Learning Rate: 0.00001
+This number seemed low enough for smooth continuous training and to not have to worry about instability
+
+- Batch Size: 64
+This is a common batch size and this seemed to give me the optimal training time vs. perplexity metrics 
 
 ---
 
 ### Training Script and weights
 
+The training script can be found in starter.py and the weights are saved in the `model_weights` directory
+
 ---
 
 ### Training on Wikitext-103
 
+Tokens/sec (epoch): 116701.73
+
+This training speed is not too bad, but there are several ways to improve it. Some of these might include increasing the batch size or seqeunce length, to looks at more tokens in parallel.
+
 ---
 
 ### Replaced Attention with Euclidean distance: Results
+
+![alt text](loss_plot_from_log_distance.png)
+
+![alt text](perplexity_plot_from_log_distance.png)
+
+The results from the  euclidean distance style transformer still perform very well on the wiki2 dataset. In fact, it outperforms the attention style. Unfortunately, the training time took much longer considering the face the batch had to be lowered from 64 to 8, due to memory constraints from the GPU. While the `attention` function uses the scaled dot product to  capture realtionships within context, euclidean distance just uses the  distance within the  multi-dimensional space, making it less flexible (and the reason it takes longer to train).
+
+The model weights can be found in the  `model_weights_distance` folder
+
+The final Test Perplexity is 141.19
+
+
+
+
 

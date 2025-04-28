@@ -80,6 +80,31 @@ class Norm(nn.Module):
         / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
         return norm
 
+def euclidean_distance(q, k):
+    """Calculates the Euclidean distance between query and key."""
+    return torch.sqrt(torch.sum((q.unsqueeze(-2) - k.unsqueeze(-3)) ** 2, dim=-1))
+
+def distance_based_attention(q, k, v, d_k, mask=None, dropout=None):
+    """Attention based on Euclidean distance."""
+    distances = euclidean_distance(q, k)  # Shape: (batch_size, num_heads, seq_len_q, seq_len_k)
+
+    # Convert distances to scores. Smaller distance means higher score.
+    # You might need to experiment with the scaling factor (-1/sqrt(d_k) is common)
+    scores = -distances / math.sqrt(d_k) # Invert and scale
+
+    if mask is not None:
+        mask = mask.unsqueeze(1)
+        scores = scores.masked_fill(mask == 0, -1e9)
+
+    # Apply softmax to get attention weights
+    weights = F.softmax(scores, dim=-1)
+
+    if dropout is not None:
+        weights = dropout(weights)
+
+    output = torch.matmul(weights, v)
+    return output
+
 def attention(q, k, v, d_k, mask=None, dropout=None):
     
     scores = torch.matmul(q, k.transpose(-2, -1)) /  math.sqrt(d_k)
@@ -127,7 +152,7 @@ class MultiHeadAttention(nn.Module):
         
 
         # calculate attention using function we will define next
-        scores = attention(q, k, v, self.d_k, mask, self.dropout)
+        scores = distance_based_attention(q, k, v, self.d_k, mask, self.dropout)
         # concatenate heads and put through final linear layer
         concat = scores.transpose(1,2).contiguous()\
         .view(bs, -1, self.d_model)
@@ -397,7 +422,11 @@ def train_model(model, opt, tokenizer):
     for epoch in range(opt.epochs):
         total_loss = 0
         num_batches = 0
+        total_tokens_processed = 0
+        start_time_epoch = time.time()
+
         for i, (input_batch, target_batch) in enumerate(data_generator(opt.train, opt.batchsize, opt.seqlen, opt.device, tokenizer)):
+            start_time_batch = time.time()
             optimizer.zero_grad()
 
             batch_size, seq_len = input_batch.size()
@@ -418,12 +447,24 @@ def train_model(model, opt, tokenizer):
             total_loss += loss.item()
             num_batches += 1
 
+            # Calculate tokens processed in this batch
+            tokens_in_batch = input_batch.numel() + target_batch.numel()
+            total_tokens_processed += tokens_in_batch
 
-        # Calculate average loss over the entire epoch
+            end_time_batch = time.time()
+            batch_time = end_time_batch - start_time_batch
+            tokens_per_second_batch = tokens_in_batch / batch_time if batch_time > 0 else 0
+
+        # Calculate average loss and perplexity for the epoch
         avg_loss_epoch = total_loss / num_batches if num_batches > 0 else 0.
         perplexity_epoch = torch.exp(torch.tensor(avg_loss_epoch)).item() if avg_loss_epoch > 0 else 0.
 
-        print(f"Epoch {epoch+1}, Train Loss: {avg_loss_epoch:.4f}, Train Perplexity: {perplexity_epoch:.2f}")
+        # Calculate tokens per second for the entire epoch
+        end_time_epoch = time.time()
+        epoch_time = end_time_epoch - start_time_epoch
+        tokens_per_second_epoch = total_tokens_processed / epoch_time if epoch_time > 0 else 0
+
+        print(f"Epoch {epoch+1}, Train Loss: {avg_loss_epoch:.4f}, Train Perplexity: {perplexity_epoch:.2f}, Tokens/sec (epoch): {tokens_per_second_epoch:.2f}")
         with open(opt.log_file, "a") as f:
             f.write(f"Epoch {epoch+1}, Train Loss: {avg_loss_epoch:.4f}, Train Perplexity: {perplexity_epoch:.2f}\n")
 
@@ -539,7 +580,7 @@ def plot_metrics(log_file):
     plt.title('Training and Validation Loss')
     plt.legend()
     plt.grid(True)
-    plt.savefig('loss_plot_from_log.png')
+    plt.savefig('loss_plot_from_log_distance.png')
     plt.show()
 
     # Plotting Perplexities
@@ -552,7 +593,7 @@ def plot_metrics(log_file):
     plt.title('Training, Validation, and Test Perplexity')
     plt.legend()
     plt.grid(True)
-    plt.savefig('perplexity_plot_from_log.png')
+    plt.savefig('perplexity_plot_from_log_distance.png')
     plt.show()
 
 def main():
@@ -567,12 +608,12 @@ def main():
     parser.add_argument('-n_layers', type=int, default=6)
     parser.add_argument('-heads', type=int, default=8)
     parser.add_argument('-dropout', type=int, default=0.1)
-    parser.add_argument('-batchsize', type=int, default=64)
+    parser.add_argument('-batchsize', type=int, default=8)
     parser.add_argument('-printevery', type=int, default=100)
     parser.add_argument('-lr', type=int, default=0.00001)
     parser.add_argument('-seqlen', type=int, default=512)
     parser.add_argument('-threshold', type=int, default=3)
-    parser.add_argument('-savename', type=str, default="model_weights")    
+    parser.add_argument('-savename', type=str, default='model_weights_distance')    
     parser.add_argument('-loadname', type=str)    
     parser.add_argument('-tied', type=int, default=1)
     parser.add_argument('-dir_name', type=str,default='model')
@@ -595,7 +636,7 @@ def main():
     dir_name = dir_name + "/"
     opt.dir_name = dir_name
     shutil.copy(source_name,dir_name + source_name)
-    opt.log_file = dir_name + "log_file.txt"
+    opt.log_file = dir_name + "log_file_distance.txt"
     
     print(str(opt))
     

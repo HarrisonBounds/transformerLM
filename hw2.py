@@ -7,6 +7,42 @@ import time
 import sys
 import json
 import numpy as np
+from torch.utils.data import Dataset
+
+class MCQADataset(Dataset):
+    def __init__(self, encoded_data, labels):
+        self.encoded_data = encoded_data
+        self.labels = labels  
+
+    def __len__(self):
+        return len(self.encoded_data)
+
+    def __getitem__(self, idx):
+        encoded_choices = self.encoded_data[idx] 
+        correct_answer_index = self.labels[idx]
+
+        input_ids = [item[0].squeeze(0) for item in encoded_choices] # Remove batch dimension
+        attention_mask = [item[1].squeeze(0) for item in encoded_choices] 
+
+        return {
+            'input_ids': torch.stack(input_ids),      
+            'attention_mask': torch.stack(attention_mask), 
+            'labels': torch.tensor(correct_answer_index) 
+        }
+
+def encode_question_choices(choices, tokenizer, max_length=128):
+    encoded_inputs = []
+    for text, _ in choices:
+        encoded = tokenizer.encode_plus(
+            "[CLS] " + text.replace(" [SEP]", " [END]"),
+            add_special_tokens=True,
+            max_length=max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+        encoded_inputs.append((encoded['input_ids'], encoded['attention_mask']))
+    return encoded_inputs
 
 
 def main():  
@@ -17,7 +53,8 @@ def main():
     test = []
     valid = []
     
-    file_name = 'train_complete.jsonl'        
+    dataset_path = "datasets/"
+    file_name = dataset_path + 'train_complete.jsonl'        
     with open(file_name) as json_file:
         json_list = list(json_file)
     for i in range(len(json_list)):
@@ -49,7 +86,7 @@ def main():
         print('  Answer: ',result['answerKey'])
         print('  ')
                 
-    file_name = 'dev_complete.jsonl'        
+    file_name = dataset_path + 'dev_complete.jsonl'        
     with open(file_name) as json_file:
         json_list = list(json_file)
     for i in range(len(json_list)):
@@ -69,7 +106,7 @@ def main():
             obs.append([text,label])
         valid.append(obs)
         
-    file_name = 'test_complete.jsonl'        
+    file_name = dataset_path + 'test_complete.jsonl'        
     with open(file_name) as json_file:
         json_list = list(json_file)
     for i in range(len(json_list)):
@@ -92,10 +129,37 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     model = BertModel.from_pretrained("bert-base-uncased")
     optimizer = optim.Adam(model.parameters(), lr=3e-5)
-    linear = torch.rand(768,2)
+    linear = torch.nn.Linear(768,4)
+    softmax = torch.nn.Softmax(dim=1)
     
 #    Add code to fine-tune and test your MCQA classifier.
-           
-                 
+
+    # 1. Encode data
+    train_encoded = []
+    valid_encoded = []
+    test_encoded = []
+
+    for obs in train:
+        train_encoded.append(encode_question_choices(obs, tokenizer))
+
+    for obs in valid:
+        valid_encoded.append(encode_question_choices(obs, tokenizer))
+
+    for obs in test:
+        test_encoded.append(encode_question_choices(obs, tokenizer))
+
+
+    model.eval()
+    with torch.no_grad():
+        for question in train_encoded:
+            for input_ids, attention_mask in question:
+                outputs = model(input_ids, attention_mask=attention_mask)
+                cls_embedding = outputs.last_hidden_state[:, 0, :]
+                logits = linear(cls_embedding)
+                probabilities = softmax(logits)
+                #print("Probabilities for a choice:", probabilities)
+
+
+
 if __name__ == "__main__":
     main()

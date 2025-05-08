@@ -30,9 +30,10 @@ class MCQADataset(Dataset):
             'labels': torch.tensor(correct_answer_index) 
         }
 
-def encode_question_choices(choices, tokenizer, max_length=128):
+def encode_question_choices_with_label(choices, tokenizer, max_length=128):
     encoded_inputs = []
-    for text, _ in choices:
+    correct_answer_index = -1
+    for i, (text, label) in enumerate(choices):
         encoded = tokenizer.encode_plus(
             "[CLS] " + text.replace(" [SEP]", " [END]"),
             add_special_tokens=True,
@@ -42,7 +43,9 @@ def encode_question_choices(choices, tokenizer, max_length=128):
             return_tensors='pt'
         )
         encoded_inputs.append((encoded['input_ids'], encoded['attention_mask']))
-    return encoded_inputs
+        if label == 1:
+            correct_answer_index = i
+    return encoded_inputs, correct_answer_index
 
 
 def main():  
@@ -139,15 +142,28 @@ def main():
     valid_encoded = []
     test_encoded = []
 
+    train_labels = []
+    valid_labels = []
+    test_labels = []
+
     for obs in train:
-        train_encoded.append(encode_question_choices(obs, tokenizer))
+        encoded, label = encode_question_choices_with_label(obs, tokenizer)
+        train_encoded.append(encoded)
+        train_labels.append(label)
+       
+    for obs in train:
+        encoded, label = encode_question_choices_with_label(obs, tokenizer)
+        train_encoded.append(encoded)
+        train_labels.append(label)
 
-    for obs in valid:
-        valid_encoded.append(encode_question_choices(obs, tokenizer))
+    for obs in train:
+        encoded, label = encode_question_choices_with_label(obs, tokenizer)
+        train_encoded.append(encoded)
+        train_labels.append(label)
 
-    for obs in test:
-        test_encoded.append(encode_question_choices(obs, tokenizer))
-
+    train_dataset = MCQADataset(train_encoded, train_labels)
+    valid_dataset = MCQADataset(valid_encoded, valid_labels)
+    test_dataset = MCQADataset(test_encoded, test_labels)
 
     model.eval()
     with torch.no_grad():

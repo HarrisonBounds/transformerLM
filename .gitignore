@@ -1,2 +1,4 @@
 *.txt
 model_weights*/
+*.jsonl
+*.zip

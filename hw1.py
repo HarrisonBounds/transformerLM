@@ -642,9 +642,9 @@ def main():
     
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
-    opt.train = read_corpus('wiki2.train.txt',tokenizer)
-    opt.valid = read_corpus('wiki2.valid.txt',tokenizer)
-    opt.test = read_corpus('wiki2.test.txt',tokenizer)
+    opt.train = read_corpus('datasets/wiki103.train.txt',tokenizer)
+    opt.valid = read_corpus('datasets/wiki103.valid.txt',tokenizer)
+    opt.test = read_corpus('datasets/wiki103.test.txt',tokenizer)
     
     # opt.vocab_size = len(tokenizer)
     # obs = len(opt.train)

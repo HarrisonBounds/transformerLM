@@ -208,3 +208,19 @@ This code implements a generative approach to answer questions from the OpenBook
 * **Generative Approach (this code):** Directly generates the text answer. Performance is evaluated using metrics like BLEU, ROUGE, and BERTscore, which assess the similarity between the generated and ground truth text.
 * **Classification Approach (from previous context):** Predicts the correct answer choice from a given set of options. Performance is typically evaluated using accuracy.
 
+#### Results
+
+Average BLEU score: 0.0041
+Average ROUGE scores: {'rouge1': 0.04208231164594359, 'rouge2': 0.0, 'rougeL': 0.03996190007753424}
+Average BERTscore F1: 0.8057
+
+Validation BLEU: 0.0037
+Validation ROUGE: {'rouge1': 0.04641229124214067, 'rouge2': 0.0, 'rougeL': 0.04399413648023591}
+Validation BERTscore F1: 0.8027
+
+Test BLEU: 0.0041
+Test ROUGE: {'rouge1': 0.04208231164594359, 'rouge2': 0.0, 'rougeL': 0.03996190007753424}
+Test BERTscore F1: 0.8057
+
+These results are pretty terrible, but I couldn't figure out where my model was going wrong. My answer predicitons were mainly only 1-4 letters, and I didn'y know why. The loss of the model was decreasing so it was learning something, I am just not sure wha. I speculate it was my generation function that was messing up, but I did not have a lot of time to fix it as I wanted to get this turned in on time
+

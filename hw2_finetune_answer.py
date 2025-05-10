@@ -252,8 +252,8 @@ def verify_tokenization(tokenizer):
 
 def main():
     seq_length = 512
-    batch_size = 8
-    num_epochs = 1
+    batch_size = 16
+    num_epochs = 20
     model_path = "model_weights_wiki103/model_epoch_20.pth"
 
     # Initialize tokenizer and model

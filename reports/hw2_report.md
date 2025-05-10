@@ -34,10 +34,7 @@ This code implements a fine-tuning approach for the BERT-base-uncased model for 
     * The predicted answer is the choice with the highest logit score (obtained using `torch.argmax` along the choice dimension).
     * The accuracy is then calculated by comparing the predicted answers with the true labels.
 
-6.  **Zero-shot Evaluation:**
-    * To assess the baseline performance of the pre-trained `bert-base-uncased` model without any task-specific fine-tuning, a separate evaluation is performed on the validation and test sets using a newly initialized `BertForMultipleChoiceCustom` model with the pre-trained weights. The accuracy obtained in this step is the zero-shot accuracy.
-
-## Reported Accuracies
+#### Reported Accuracies
 
 **Zero-Shot Accuracy:**
 
@@ -49,7 +46,7 @@ This code implements a fine-tuning approach for the BERT-base-uncased model for 
 * **Validation Set:** 65%
 * **Test Set:** 64%
 
-## Limitations of the Approach and Possible Solutions
+#### Limitations of the Approach and Possible Solutions
 
 1.  **Input Length Constraints:** BERT has a maximum input sequence length (typically 512 tokens). If the combined length of the fact, stem, and choice text exceeds this limit, the tokenizer will truncate the input, potentially leading to a loss of crucial information.
     * **Possible Solutions:** Explore different truncation strategies (e.g., prioritizing the choice text), or if the context is very long, consider techniques like sliding window (though this adds complexity to the classification).
@@ -68,7 +65,7 @@ This approach provides a basic yet effective method for fine-tuning BERT for mul
 
 This code implements a generative approach to answer multiple-choice questions from the OpenBookQA dataset. The core idea is to train the custom Transformer model (in HW1) to generate the correct answer key (A, B, C, or D) given the fact, question stem, and answer choices.
 
-1. ** Data Preparation and Tokenization:**
+1. **Data Preparation and Tokenization:**
 
 * The `tokenize_data` function reads the OpenBookQA JSONL files. For each question, it constructs a sequence that includes:
     * A `[START]` token to mark the beginning.
@@ -78,8 +75,6 @@ This code implements a generative approach to answer multiple-choice questions f
     * An `[ANSWER]` token to indicate the start of the target answer.
     * The correct `answerKey` (A, B, C, or D) enclosed in angle brackets.
 
-    For example, a tokenized sequence might look like:
-    `[START] <The sun is the source of energy for physical cycles on Earth> <The sun is responsible for> [A] <puppies learning new tricks> [B] <children growing up and getting old> [C] <flowers wilting in a vase> [D] <plants sprouting, blooming and wilting> [ANSWER] <D>`
 
 * The `encode_sequences` function uses the `GPT2TokenizerFast` to convert these text sequences into sequences of token IDs. Special tokens `[START]`, `[A]`, `[B]`, `[C]`, `[D]`, and `[ANSWER]` are added to the tokenizer's vocabulary to be treated as distinct units.
 
@@ -92,7 +87,7 @@ This code implements a generative approach to answer multiple-choice questions f
 
 3. **Pre-training:**
 
-* The provided code snippet focuses on fine-tuning and does not include the pre-training phase on Wikitext-103. Therefore, learning curves for pre-training and the final perplexity on the Wikitext-103 test set are not available within this code. It's assumed that the `model_path` points to a model already pre-trained on Wikitext-103.
+* The model was pretrained on the wiki103 dataset as define in `hw1.py`
 
 4. **Fine-tuning:**
 

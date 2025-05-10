@@ -113,9 +113,9 @@ This code implements a generative approach to answer multiple-choice questions f
 * **Larger Pre-trained Models:** Utilizing larger and more capable pre-trained models could improve the generation quality and task understanding.
 * **Multi-task Learning:** Training the model on multiple related tasks could improve its ability to understand and generate relevant information.
 
-9. **Performance Comparison with Classification Approach:**
 
-**Fine-tuned Accuracy:**
+
+#### Fine-tuned Accuracy:
 
 * **Validation Set:** 25%
 * **Test Set:** 27%

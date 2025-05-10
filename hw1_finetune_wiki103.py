@@ -1,4 +1,5 @@
 import json
+from transformers import GPT2TokenizerFast
 
 def tokenize_data(dataset):
     seq_list = []
@@ -29,11 +30,27 @@ def tokenize_data(dataset):
     
     return seq_list
 
-# Example usage
-tokenized_data = tokenize_data("datasets/train_complete.jsonl")
+def encode_sequences(text_sequences, tokenizer):
+    tokenized_data = []
+    for seq in text_sequences:
+        encoded = tokenizer.encode(seq, add_special_tokens=True)
+        tokenized_data.extend(encoded)
+    return tokenized_data
 
-# Print the first few examples to verify
-for i, seq in enumerate(tokenized_data[:3]):
-    print(f"Example {i+1}:")
-    print(seq)
-    print()
+def main():
+    tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+    tokenizer.pad_token = tokenizer.eos_token  # Set padding token
+    
+    # Add your special tokens if they don't exist
+    special_tokens = ["[START]", "[A]", "[B]", "[C]", "[D]", "[ANSWER]"]
+    tokenizer.add_special_tokens({"additional_special_tokens": special_tokens})
+    
+    text_sequences = tokenize_data("datasets/train_complete.jsonl")
+
+    tokenized_ids = encode_sequences(text_sequences, tokenizer)
+
+    for i in tokenized_ids:
+        print(i)
+
+main()
+
